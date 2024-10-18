@@ -1,24 +1,42 @@
-const std = @import("std");
+// raylib-zig (c) Nikolas Wipper 2023
 
-pub fn main() !void {
-    // Prints to stderr (it's a shortcut based on `std.io.getStdErr()`)
-    std.debug.print("All your {s} are belong to us.\n", .{"codebase"});
+const rl = @import("raylib");
 
-    // stdout is for the actual output of your application, for example if you
-    // are implementing gzip, then only the compressed bytes should be sent to
-    // stdout, not any debugging messages.
-    const stdout_file = std.io.getStdOut().writer();
-    var bw = std.io.bufferedWriter(stdout_file);
-    const stdout = bw.writer();
+const screenWidth = 800;
+const screenHeight = 450;
 
-    try stdout.print("Run `zig build test` to run the tests.\n", .{});
+const grid_color = rl.Color.init(14, 14, 29, 20);
 
-    try bw.flush(); // don't forget to flush!
+pub fn main() anyerror!void {
+    // Initialization
+    rl.initWindow(screenWidth, screenHeight, "Sand faling simulation");
+    defer rl.closeWindow(); // Close window and OpenGL context
+
+    rl.setTargetFPS(60); // Set our game to run at 60 frames-per-second
+    //--------------------------------------------------------------------------------------
+
+    // Main game loop
+    while (!rl.windowShouldClose()) { // Detect window close button or ESC key
+        rl.clearBackground(rl.Color.ray_white);
+
+        draw_grid();
+
+        rl.endDrawing();
+    }
 }
 
-test "simple test" {
-    var list = std.ArrayList(i32).init(std.testing.allocator);
-    defer list.deinit(); // try commenting this out and see if zig detects the memory leak!
-    try list.append(42);
-    try std.testing.expectEqual(@as(i32, 42), list.pop());
+fn draw_grid() void {
+    var i: i32 = 0;
+    while (i < screenWidth) {
+        rl.beginDrawing();
+        rl.drawLine(i, 0, i, screenHeight, grid_color);
+        i = i + 10;
+    }
+
+    i = 0;
+    while (i < screenHeight) {
+        rl.beginDrawing();
+        rl.drawLine(0, i, screenWidth, i, grid_color);
+        i = i + 10;
+    }
 }
