@@ -225,7 +225,7 @@ pub fn main() anyerror!void {
         if (curr_time - last_tick > 0.001) {
             last_tick = curr_time;
 
-            // grid.generate_sand(2 * (grid.columns / 3) - 10, 2 * (grid.columns / 3) + 10);
+            grid.generate_sand(2 * (grid.columns / 3) - 10, 2 * (grid.columns / 3) + 10);
             grid.generate_sand(grid.columns / 5 - 10, grid.columns / 5 + 10);
         }
 
