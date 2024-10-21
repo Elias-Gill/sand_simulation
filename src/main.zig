@@ -11,7 +11,7 @@ var rand: std.Random = undefined;
 const screenWidth = 800;
 const screenHeight = 450;
 
-const particle_size = 4; // one particle of "sand" is a square of 4px by 4px.
+const particle_size = 2; // one particle of "sand" is a square of 4px by 4px.
 
 const Grid = struct {
     // x-coordinates where the grid starts and ends in the screen
@@ -113,55 +113,79 @@ const Grid = struct {
                 continue;
             }
 
-            // Check if a cell bellow exists.
+            // Ignore the bottom ones.
             if (self.out_of_bounds(bellow)) {
                 continue;
             }
 
-            // Check if the cell bellow is occupied.
-            if (self.grid[bellow]) {
-                // if the cell is endeed ocupied, then check bellow to the left and
-                // bellow to the right.
-                if (!self.out_of_bounds(bellow + 1) and !self.grid[bellow + 1]) {
-
-                    // if both sides are empty then randomly fall to one side.
-                    if (!self.out_of_bounds(bellow - 1) and !self.grid[bellow - 1]) {
-                        const left = rand.boolean();
-                        if (left) {
-                            self.grid[cell] = false;
-                            self.grid[bellow - 1] = true;
-                            continue;
-                        }
-                    }
-
-                    // or fall to the right
-                    self.grid[cell] = false;
-                    self.grid[bellow + 1] = true;
+            // If the cell bellow is empty then fall inmediatlly
+            if (!self.grid[bellow]) {
+                // randomly decide to stay on this cell or fall down
+                if (rand.intRangeAtMost(usize, 0, 100) > 87) {
                     continue;
                 }
 
-                // fall to the left
+                self.grid[cell] = false;
+                self.grid[bellow] = true;
+                continue;
+            }
+
+            // if the cell bellow is endeed ocupied, then check bellow to the right
+            if (!self.out_of_bounds(bellow + 1) and !self.grid[bellow + 1]) {
+
+                // Check to the left. If both sides are empty then randomly fall to one side.
                 if (!self.out_of_bounds(bellow - 1) and !self.grid[bellow - 1]) {
-                    // or fall to the right
-                    self.grid[cell] = false;
-                    self.grid[bellow - 1] = true;
+                    const left = rand.boolean();
+                    if (left) {
+                        self.grid[cell] = false;
+                        self.grid[bellow - 1] = true;
+                        continue;
+                    }
                 }
 
-                // or ignore this cell
+                // or fall to the right
+                self.grid[cell] = false;
+                self.grid[bellow + 1] = true;
                 continue;
             }
 
-            // randomly decide to stay on this cell or fall down
-            if (rand.intRangeAtMost(usize, 0, 100) > 87) {
-                continue;
+            // fall to the left
+            if (!self.out_of_bounds(bellow - 1) and !self.grid[bellow - 1]) {
+                self.grid[cell] = false;
+                self.grid[bellow - 1] = true;
             }
-            self.grid[cell] = false;
-            self.grid[bellow] = true;
+
+            // or ignore this cell
         }
     }
 
     fn out_of_bounds(self: Grid, i: usize) bool {
-        return i >= self.grid.len;
+        return i >= self.grid.len or i < 0;
+    }
+
+    // Add a random block of sand inside the simulation
+    fn generate_sand(self: Grid, left: usize, right: usize) void {
+        const position = rand.intRangeAtMost(usize, left, right);
+        const random = rand.intRangeAtMost(usize, 0, 100);
+
+        if (random > 30 and random < 60) {
+            // generate a block of sand
+            self.grid[position] = true;
+            self.grid[position + 1] = true;
+            self.grid[position + 2] = true;
+            self.grid[position + 3] = true;
+            self.grid[position + 4] = true;
+            self.grid[position + 5] = true;
+            self.grid[position + 6] = true;
+
+            self.grid[position + self.columns] = true;
+            self.grid[position + 1 + self.columns] = true;
+            self.grid[position + 2 + self.columns] = true;
+            self.grid[position + 3 + self.columns] = true;
+            self.grid[position + 4 + self.columns] = true;
+            self.grid[position + 5 + self.columns] = true;
+            self.grid[position + 6 + self.columns] = true;
+        }
     }
 };
 
@@ -196,39 +220,16 @@ pub fn main() anyerror!void {
     // Main game loop
 
     while (!rl.windowShouldClose()) {
-        // Verify if the last action occurred at least 1 milisecond ago. If so,
-        // updates the grid to a new state.
-        //
-        // Only refresh the grid and the state on every milisecond.
+        // Randomly generate a bunch of sand every milisecond
         const curr_time: f64 = rl.getTime();
-        if (curr_time - last_tick > 0.0001) {
+        if (curr_time - last_tick > 0.001) {
             last_tick = curr_time;
 
-            // Add a random new particle inside the simulation
-            const position = rand.intRangeAtMost(usize, grid.columns / 2 - 10, grid.columns / 2 + 10);
-            const random = rand.intRangeAtMost(usize, 0, 100);
-
-            if (random > 30 and random < 60) {
-                // generate a block of sand
-                grid.grid[position] = true;
-                grid.grid[position + 1] = true;
-                grid.grid[position + 2] = true;
-                grid.grid[position + 3] = true;
-                grid.grid[position + 4] = true;
-                grid.grid[position + 5] = true;
-                grid.grid[position + 6] = true;
-
-                grid.grid[position + grid.columns] = true;
-                grid.grid[position + 1 + grid.columns] = true;
-                grid.grid[position + 2 + grid.columns] = true;
-                grid.grid[position + 3 + grid.columns] = true;
-                grid.grid[position + 4 + grid.columns] = true;
-                grid.grid[position + 5 + grid.columns] = true;
-                grid.grid[position + 6 + grid.columns] = true;
-            }
-
-            grid.update();
+            // grid.generate_sand(2 * (grid.columns / 3) - 10, 2 * (grid.columns / 3) + 10);
+            grid.generate_sand(grid.columns / 5 - 10, grid.columns / 5 + 10);
         }
+
+        grid.update();
 
         rl.clearBackground(rl.Color.ray_white);
         rl.beginDrawing();
