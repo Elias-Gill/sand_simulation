@@ -5,7 +5,7 @@ const Allocator = std.mem.Allocator;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 const allocator: Allocator = gpa.allocator();
 
-var prng: std.rand.DefaultPrng = undefined;
+var prng: std.Random.DefaultPrng = undefined;
 var rand: std.Random = undefined;
 
 const screenWidth = 800;
@@ -101,62 +101,69 @@ const Grid = struct {
         }
     }
 
-    // Simulates the falling of the sand.
-    fn update(self: Grid) void {
-        // Start updating the particles one at a time from bottom up.
-        for (1..self.grid.len + 1) |i| {
-            const cell = self.grid.len - i;
-            const bellow = cell + self.columns;
+    // Simulates the falling of the sand. (2 cells per milisecond)
+    fn update(self: Grid, dt: f64) void {
+        // Calculate how many simulation steps we need based on elapsed time
+        const updates_per_second = 60; // Target simulation rate
+        const target_dt = 1.0 / @as(f64, updates_per_second);
+        var steps = @max(1, @as(usize, @intFromFloat(dt / target_dt + 0.5)));
 
-            // ignore empty cells
-            if (!self.grid[cell]) {
-                continue;
-            }
+        // Limit maximum steps to prevent spiral of death
+        steps = @min(steps, 10);
 
-            // Ignore the bottom ones.
-            if (self.out_of_bounds(bellow)) {
-                continue;
-            }
+        // Process multiple simulation steps if needed
+        for (0..steps) |_| {
+            self.updateStep();
+        }
+    }
 
-            // If the cell bellow is empty then fall inmediatlly
-            if (!self.grid[bellow]) {
-                // randomly decide to stay on this cell or fall down
+    fn updateStep(self: Grid) void {
+        // Process particles from bottom to top
+        var i = self.grid.len;
+        while (i > 0) {
+            i -= 1;
+            const curr_cell = i;
+
+            // Skip empty cells
+            if (!self.grid[curr_cell]) continue;
+
+            const cell_below = curr_cell + self.columns;
+
+            // Skip particles at bottom
+            if (self.out_of_bounds(cell_below)) continue;
+
+            // Fall down with probability based on time step
+            if (!self.grid[cell_below]) {
+                // randomly decide to stay on this cell or fall down (this gives a more
+                // pleasing effect)
                 if (rand.intRangeAtMost(usize, 0, 100) > 87) {
                     continue;
                 }
-
-                self.grid[cell] = false;
-                self.grid[bellow] = true;
+                self.moveCell(curr_cell, cell_below);
                 continue;
             }
 
-            // if the cell bellow is endeed ocupied, then check bellow to the right
-            if (!self.out_of_bounds(bellow + 1) and !self.grid[bellow + 1]) {
+            // Side movement checks
+            const right_available = !self.out_of_bounds(cell_below + 1) and !self.grid[cell_below + 1];
+            const left_available = !self.out_of_bounds(cell_below - 1) and !self.grid[cell_below - 1];
 
-                // Check to the left. If both sides are empty then randomly fall to one side.
-                if (!self.out_of_bounds(bellow - 1) and !self.grid[bellow - 1]) {
-                    const left = rand.boolean();
-                    if (left) {
-                        self.grid[cell] = false;
-                        self.grid[bellow - 1] = true;
-                        continue;
-                    }
+            if (right_available and left_available) {
+                if (rand.boolean()) {
+                    self.moveCell(curr_cell, cell_below - 1);
+                } else {
+                    self.moveCell(curr_cell, cell_below + 1);
                 }
-
-                // or fall to the right
-                self.grid[cell] = false;
-                self.grid[bellow + 1] = true;
-                continue;
+            } else if (right_available) {
+                self.moveCell(curr_cell, cell_below + 1);
+            } else if (left_available) {
+                self.moveCell(curr_cell, cell_below - 1);
             }
-
-            // fall to the left
-            if (!self.out_of_bounds(bellow - 1) and !self.grid[bellow - 1]) {
-                self.grid[cell] = false;
-                self.grid[bellow - 1] = true;
-            }
-
-            // or ignore this cell
         }
+    }
+
+    fn moveCell(self: Grid, from: usize, to: usize) void {
+        self.grid[from] = false;
+        self.grid[to] = true;
     }
 
     fn out_of_bounds(self: Grid, i: usize) bool {
@@ -191,7 +198,7 @@ const Grid = struct {
 
 pub fn main() anyerror!void {
     // Initialize a random numbers generator
-    prng = std.rand.DefaultPrng.init(blk: {
+    prng = std.Random.DefaultPrng.init(blk: {
         var seed: u64 = undefined;
         try std.posix.getrandom(std.mem.asBytes(&seed));
         break :blk seed;
@@ -220,22 +227,25 @@ pub fn main() anyerror!void {
     // Main game loop
 
     while (!rl.windowShouldClose()) {
-        // Randomly generate a bunch of sand every milisecond
         const curr_time: f64 = rl.getTime();
-        if (curr_time - last_tick > 0.001) {
+        const lapsed_time: f64 = curr_time - last_tick;
+
+        // update the grid on every milisecond
+        if (lapsed_time > 0.001) {
             last_tick = curr_time;
 
+            // Randomly generate a bunch of sand
             grid.generate_sand(2 * (grid.columns / 3) - 10, 2 * (grid.columns / 3) + 10);
             grid.generate_sand(grid.columns / 5 - 10, grid.columns / 5 + 10);
+
+            // Update the sand grid
+            grid.update(lapsed_time);
         }
 
-        grid.update();
-
+        // Draw the updated frame
         rl.clearBackground(rl.Color.ray_white);
         rl.beginDrawing();
-
         grid.draw_grid();
-
         rl.endDrawing();
     }
 }
